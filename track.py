@@ -18,6 +18,15 @@ def goodMatches(dsc_src, dsc_dst) :
                 good.append(m)
         return good
 
+def selectObj(event,x,y,flags,param) :
+        if not init :
+                if event == cv2.EVENT_LBUTTONUP :
+                        global click_x
+                        global click_y
+                        click_x = x
+                        click_y = y
+        
+
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-v", "--video", type=str, help="path to input video file")
@@ -55,9 +64,13 @@ dn_dir = "/home/n7/darknet/"
 net = dn.load_net(dn_dir + "cfg/yolov3.cfg", dn_dir + "yolov3.weights", 0)
 meta = dn.load_meta(dn_dir + "cfg/coco.data")
 
+
 init = False
-kp2=0
-des2=0
+cv2.namedWindow('Frame')
+cv2.setMouseCallback("Frame", selectObj)
+
+click_x = -1
+click_y = -1
 
 while True :
         frame = vs.read()
@@ -75,31 +88,36 @@ while True :
                 for i in r :
                         #print(i[0])
                         if i[0] == "cell phone" :
-                                init = True
-
                                 [d_xa, d_ya, d_xb, d_yb] = [int(i[2][0] - i[2][2]/2), int(i[2][1] - i[2][3]/2), int(i[2][0] + i[2][2]/2), int(i[2][1] + i[2][3]/2)]
                                 [d_xa, d_ya, d_xb, d_yb] = [max(0, d_xa), max(0,d_ya), min(d_xb, W), min(d_yb, H)]
-                                                                
-                                trkCSRT.init(frame, (d_xa,d_ya,d_xb-d_xa,d_yb-d_ya))
 
-                                roi = cv2.cvtColor(frame[d_ya:d_yb, d_xa:d_xb], cv2.COLOR_BGR2GRAY)
-                                cv2.imshow("0", roi)
-                                kptSIFT_src[0], dscSIFT_src[0] = sift.detectAndCompute(roi, None)
-                                dims_src[0] = roi.shape[:2]
-                                roi = imutils.rotate_bound(roi, 90)
-                                cv2.imshow("90", roi)
-                                kptSIFT_src[1], dscSIFT_src[1] = sift.detectAndCompute(roi, None)
-                                dims_src[1] = roi.shape[:2]
-                                roi = imutils.rotate_bound(roi, 90)
-                                cv2.imshow("180", roi)
-                                kptSIFT_src[2], dscSIFT_src[2] = sift.detectAndCompute(roi, None)
-                                dims_src[2] = roi.shape[:2]
-                                roi = imutils.rotate_bound(roi, 90)
-                                cv2.imshow("270", roi)
-                                kptSIFT_src[3], dscSIFT_src[3] = sift.detectAndCompute(roi, None)
-                                dims_src[3] = roi.shape[:2]
+                                cv2.rectangle(frame, (d_xa, d_ya), (d_xb, d_yb), (0, 255, 0), 2)
 
-                                break
+                                if click_x > d_xa and click_x < d_xb and click_y > d_ya and click_y < d_yb :
+                                        init = True
+                                        click_x = -1
+                                        click_y = -1
+                                                           
+                                        trkCSRT.init(frame, (d_xa,d_ya,d_xb-d_xa,d_yb-d_ya))
+
+                                        roi = cv2.cvtColor(frame[d_ya:d_yb, d_xa:d_xb], cv2.COLOR_BGR2GRAY)
+                                        cv2.imshow("0", roi)
+                                        kptSIFT_src[0], dscSIFT_src[0] = sift.detectAndCompute(roi, None)
+                                        dims_src[0] = roi.shape[:2]
+                                        roi = imutils.rotate_bound(roi, 90)
+                                        cv2.imshow("90", roi)
+                                        kptSIFT_src[1], dscSIFT_src[1] = sift.detectAndCompute(roi, None)
+                                        dims_src[1] = roi.shape[:2]
+                                        roi = imutils.rotate_bound(roi, 90)
+                                        cv2.imshow("180", roi)
+                                        kptSIFT_src[2], dscSIFT_src[2] = sift.detectAndCompute(roi, None)
+                                        dims_src[2] = roi.shape[:2]
+                                        roi = imutils.rotate_bound(roi, 90)
+                                        cv2.imshow("270", roi)
+                                        kptSIFT_src[3], dscSIFT_src[3] = sift.detectAndCompute(roi, None)
+                                        dims_src[3] = roi.shape[:2]
+
+                                        break
                         
         else :
                 trkCSRT_cp = trkCSRT
@@ -186,7 +204,6 @@ while True :
 
                                                 if ovlp_area >= 0.5*dtcn_area :
                                                         #cv2.rectangle(frame, (t_xa, t_ya), (t_xa + t_w, t_ya + t_h), (255, 0, 0), 2)
-                                                        print("Action")
                                                         trkCSRT = cv2.TrackerCSRT_create()
                                                         trkCSRT.init(frame, (d_xa,d_ya,d_xb-d_xa,d_yb-d_ya))   
                                 
@@ -209,6 +226,8 @@ while True :
         # if the `q` key was pressed, break from the loop
         if key == ord("q"):
                 break
+        elif key == ord("c"):
+                init = False
 
 
 # if we are using a webcam, release the pointer
