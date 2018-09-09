@@ -1,23 +1,28 @@
-from imutils.video import VideoStream
-from imutils.video import FPS
-import imutils
-import argparse
-import time
-import numpy as np
-import cv2
-import matplotlib.pyplot as plt
-import darknet as dn
 from copy import deepcopy as dc
+from imutils.video import FPS
+from imutils.video import VideoStream
+import darknet as dn
+import matplotlib.pyplot as plt
+import argparse
+import cv2
+import imutils
+import numpy as np
+import time
 
+# Function To Return The Good Matches
 def goodMatches(dsc_src, dsc_dst) :
+        #Carry Out FLANN Based Matching
         matches = flann.knnMatch(dsc_src,dsc_dst,k=2)
-        # store all the good matches as per Lowe's ratio test.
+        
+        # Keep Only The Good Matches According To Lowe's Ratio Test.
         good = []
         for m,n in matches:
             if m.distance < 0.7*n.distance:
                 good.append(m)
         return good
 
+
+# Function To Handle Mouse Left Button Release Event
 def selectObj(event,x,y,flags,param) :
         if not init :
                 if event == cv2.EVENT_LBUTTONUP :
@@ -27,79 +32,95 @@ def selectObj(event,x,y,flags,param) :
                         click_y = y
         
 
-# construct the argument parser and parse the arguments
-ap = argparse.ArgumentParser()
-ap.add_argument("-v", "--video", type=str, help="path to input video file")
-ap.add_argument("-t", "--tracker", type=str, default="kcf", help="OpenCV object tracker type")
-args = vars(ap.parse_args())
 
-# if a video path was not supplied, grab the reference to the web cam
-if not args.get("video", False):
-        print("[INFO] starting video stream...")
-        #vs = cv2.VideoCapture(0)
-        vs = VideoStream(src=0).start()
-        time.sleep(1.0)
+# Start The Webcam Stream
+print("Starting Webcam...")
+vs = VideoStream(src=0).start()
+time.sleep(1.0)
  
-# otherwise, grab a reference to the video file
-else:
-        vs = cv2.VideoCapture(args["video"])
-
+# Create Objects For Tracker And Its Clone
 trkCSRT = cv2.TrackerCSRT_create()
 trkCSRT_cp = cv2.TrackerCSRT_create()
 
+# Create Object For SIFT Feature Extractor
 sift = cv2.xfeatures2d.SIFT_create()
+
+# Initialize SIFT Parameter Arrays For Various Orientations Of Source Image
 kptSIFT_src = [None, None, None, None]
 dscSIFT_src = [None, None, None, None]
 dims_src = [None,None,None,None]
 
+# Configure The FLANN Based Matcher
 FLANN_INDEX_KDTREE = 1
 index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
 search_params = dict(checks = 50)
 flann = cv2.FlannBasedMatcher(index_params, search_params)
- 
-# initialize the FPS throughput estimator
-fps = FPS().start()
 
+# Configure YOLO
 dn_dir = "/home/n7/darknet/"
 net = dn.load_net(dn_dir + "cfg/yolov3.cfg", dn_dir + "yolov3.weights", 0)
 meta = dn.load_meta(dn_dir + "cfg/coco.data")
+ 
+# Initialize FPS Estimator
+fps = FPS().start()
 
-
+# Parameter To Store Status Of Tracking
 init = False
+
+# Create A Window And Link The Mouse Event To Its Function
 cv2.namedWindow('Frame')
 cv2.setMouseCallback("Frame", selectObj)
 
+# Position Of Click. Negative Values Indicate No Click
 click_x = -1
 click_y = -1
 
 while True :
+        # Capture Frame From Stream
         frame = vs.read()
-        frame = frame[1] if args.get("video", False) else frame
 
-        # check to see if we have reached the end of the stream
-        if frame is None:
+        # Check If End Of Stream Has Been Reached
+        if frame is None :
+                print("Stream Ended")
                 break
 
-        (H, W) = frame.shape[:2]
+        # Store Dimensions Of Frame
+        H, W = frame.shape[:2]
 
+        # Save The Frame To Memory
+        cv2.imwrite("f.png",frame)
+
+        # Run YOLO On The Stored File
+        r = dn.detect(net, meta, "f.png")
+
+        # If Tracking Is Not Currently Active
         if not init :
-                cv2.imwrite("f.png",frame)
-                r = dn.detect(net, meta, "f.png")        
+                # Loop Through The Detections Given By YOLO
                 for i in r :
-                        #print(i[0])
+                        # Focus Only On The Detections Of Specified Type
                         if i[0] == "cell phone" :
+                                # Convert YOLO Coordinates To OpenCV Coordinates
                                 [d_xa, d_ya, d_xb, d_yb] = [int(i[2][0] - i[2][2]/2), int(i[2][1] - i[2][3]/2), int(i[2][0] + i[2][2]/2), int(i[2][1] + i[2][3]/2)]
-                                [d_xa, d_ya, d_xb, d_yb] = [max(0, d_xa), max(0,d_ya), min(d_xb, W), min(d_yb, H)]
 
+                                # Limit The Coordinates To Image Boundaries
+                                [d_xa, d_ya, d_xb, d_yb] = [max(0, d_xa), max(0,d_ya), min(d_xb, W-1), min(d_yb, H-1)]
+
+                                # Draw A Rectangle To Show The Detection
                                 cv2.rectangle(frame, (d_xa, d_ya), (d_xb, d_yb), (0, 255, 0), 2)
 
+                                # Check If Click Was Inside The Detection Area
                                 if click_x > d_xa and click_x < d_xb and click_y > d_ya and click_y < d_yb :
+                                        # Set Tracking Status To True
                                         init = True
+
+                                        # Reset Click Position Back To Negative
                                         click_x = -1
                                         click_y = -1
-                                                           
+
+                                        # Initialize CSRT Tracker               
                                         trkCSRT.init(frame, (d_xa,d_ya,d_xb-d_xa,d_yb-d_ya))
 
+                                        # Compute SIFT Features For 4 Different Orientations (Separated By 90 Deg.)
                                         roi = cv2.cvtColor(frame[d_ya:d_yb, d_xa:d_xb], cv2.COLOR_BGR2GRAY)
                                         cv2.imshow("0", roi)
                                         kptSIFT_src[0], dscSIFT_src[0] = sift.detectAndCompute(roi, None)
@@ -118,126 +139,153 @@ while True :
                                         dims_src[3] = roi.shape[:2]
 
                                         break
-                        
+
+        #If Tracking Is Active               
         else :
+                # Clone The Tracker And Use The Clone To Find A Positive
                 trkCSRT_cp = trkCSRT
                 [resCSRT, roiCSRT] = trkCSRT_cp.update(frame)
 
+                # List To Store Detections Of Particular Class
                 dtcts = []
 
-                cv2.imwrite("f.png",frame)
-                r = dn.detect(net, meta, "f.png")
-                
+                # Loop Through The Detections Given By YOLO
                 for i in r :
-                        #print(i[0])
+                        # Focus Only On The Detections Of Specified Type
                         if i[0] == "cell phone" :
                                 dtcts.append(i)
-                                
-                                [d_xa, d_ya, d_xb, d_yb] = [int(i[2][0] - i[2][2]/2), int(i[2][1] - i[2][3]/2), int(i[2][0] + i[2][2]/2), int(i[2][1] + i[2][3]/2)]
-                                [d_xa, d_ya, d_xb, d_yb] = [max(0, d_xa), max(0,d_ya), min(d_xb, W), min(d_yb, H)]
-                                
-                                #cv2.rectangle(frame, (d_xa, d_ya), (d_xb, d_yb), (0, 255, 0), 2)
-                                
-                                
+                                                               
+
+                # If CSRT Tracking Was Successful                
                 if resCSRT :
                         for i in dtcts:
+                                # Convert YOLO Coordinates To OpenCV Coordinates
                                 [d_xa, d_ya, d_xb, d_yb] = [int(i[2][0] - i[2][2]/2), int(i[2][1] - i[2][3]/2), int(i[2][0] + i[2][2]/2), int(i[2][1] + i[2][3]/2)]
-                                [d_xa, d_ya, d_xb, d_yb] = [max(0, d_xa), max(0,d_ya), min(d_xb, W), min(d_yb, H)]
-                                
+
+                                # Limit The Coordinates To Image Boundaries
+                                [d_xa, d_ya, d_xb, d_yb] = [max(0, d_xa), max(0,d_ya), min(d_xb, W-1), min(d_yb, H-1)]
+
+                                # Obtain Coordinates Of The Positive Generated By CSRT Tracker
                                 [t_xa, t_ya, t_w, t_h] = [int(a) for a in roiCSRT]
-                                
+
+                                # Compute Overlap Area Of YOLO Detection With CSRT Positive
                                 ovlp_area = (sorted([d_xa, t_xa + t_w, d_xb])[1] - sorted([d_xa,t_xa,d_xb])[1])*(sorted([d_ya,t_ya + t_h, d_yb])[1] - sorted([d_ya,t_ya,d_yb])[1])
+
+                                # Compute YOLO Detection Area
                                 dtcn_area = (d_xb - d_xa) * (d_yb - d_ya)
 
-                                #Detection Of True Positives
+                                # Verify If CSRT Positive Is Actually A Positive
                                 if ovlp_area >= 0.5*dtcn_area :
+                                        # Draw Rectangle To Show Tracking Of Object
                                         cv2.rectangle(frame, (t_xa, t_ya), (t_xa + t_w, t_ya + t_h), (0, 0, 255), 2)
+                                        
+                                        # Re-initialize The Tracker On The Current Positive
                                         trkCSRT = cv2.TrackerCSRT_create()
                                         trkCSRT.init(frame, (d_xa,d_ya,d_xb-d_xa,d_yb-d_ya))
+
+                                        # Print The Coordinates Of Centre Of Positive
                                         #print("Centre : " + str(t_xa + t_w/2) + ", " + str(t_ya + t_h/20))
                                         break
 
+                                # If No True Positive Is Found, Set resCSRT To False
                                 if dtcts.index(i) == len(dtcts)-1 :
                                         resCSRT = False
             
 
+                # If CSRT Tracking Was Unsuccessful Or If A False Positive Was Generated
                 if not resCSRT :
+                        # If At Least One YOLO Detection Is Found
                         if len(dtcts) :
+                                # Compute SIFT Features For Current Frame
                                 kptSIFT_dst, dscSIFT_dst = sift.detectAndCompute(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), None)
                                 
                         for i in dtcts :
+                                # Convert YOLO Coordinates To OpenCV Coordinates
                                 [d_xa, d_ya, d_xb, d_yb] = [int(i[2][0] - i[2][2]/2), int(i[2][1] - i[2][3]/2), int(i[2][0] + i[2][2]/2), int(i[2][1] + i[2][3]/2)]
-                                [d_xa, d_ya, d_xb, d_yb] = [max(0, d_xa), max(0,d_ya), min(d_xb, W), min(d_yb, H)]
 
+                                # Limit The Coordinates To Image Boundaries
+                                [d_xa, d_ya, d_xb, d_yb] = [max(0, d_xa), max(0,d_ya), min(d_xb, W-1), min(d_yb, H-1)]
+                                
+                                # Generate Matches For Current Frame With Each Of The Initiallly Calculated 4 Orientations
                                 good = [None,None,None,None]
                                 good[0] = goodMatches(dscSIFT_src[0], dscSIFT_dst)
                                 good[1] = goodMatches(dscSIFT_src[1], dscSIFT_dst)
                                 good[2] = goodMatches(dscSIFT_src[2], dscSIFT_dst)
                                 good[3] = goodMatches(dscSIFT_src[3], dscSIFT_dst)
 
+                                # Fing The Best Matching Set
                                 best_index = 0
                                 for index in range (1,4) :
                                         if len(good[index]) > len(good[best_index]) :
                                                 best_index = index
-
                                 matches_best = good[best_index]
-                                                
+
+                                # If Best Match Is Better Than The Threshold                                                
                                 if len(matches_best)>10 :
-                                        #print(best_index)
+                                        # Create NumPy Arrays Of Matching Points In Source And Destination Images
                                         src_pts = np.float32([kptSIFT_src[best_index][m.queryIdx].pt for m in matches_best]).reshape(-1,1,2)
                                         dst_pts = np.float32([kptSIFT_dst[m.trainIdx].pt for m in matches_best]).reshape(-1,1,2)
+
+                                        # Find Homography Matrix From Corresponding Points In Source And Destination Images
                                         M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
                                         matchesMask = mask.ravel().tolist()
+
+                                        # Set Dimensions To That Of Best Matching Source
                                         h = dims_src[best_index][0]
                                         w = dims_src[best_index][1]
+
+                                        # NumPy Array Of Corner Points Of Source
                                         pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
+
+                                        #If Homography Matrix Is Found
                                         if M is not None:
+                                                # Find Points Corresponding To Corners In Source Image
                                                 dst = cv2.perspectiveTransform(pts,M)
-                                                
-                                                corPts = [[int(i[0][0]), int(i[0][1])] for i in dst]
+
+                                                # Find Bounding Box Coordinates From NumPy Array Of Perspective Corners
                                                 [t_xa, t_ya, t_xb, t_yb] = [min(i[0][0] for i in dst), min(i[0][1] for i in dst), max(i[0][0] for i in dst), max(i[0][1] for i in dst)]
-                                                #cv2.rectangle(frame, (t_xa, t_ya), (t_xb, t_yb), (0, 255, 0), 2)
+                                                #cv2.rectangle(frame, (t_xa, t_ya), (t_xb, t_yb), (255, 255, 255), 2)
                                                 cv2.polylines(frame,[np.int32(dst)],True,(255,0,0),2, cv2.LINE_AA)
 
+                                                # Compute Overlap Area Of YOLO Detection With SIFT/FLANN Detection
                                                 ovlp_area = (sorted([d_xa, t_xb, d_xb])[1] - sorted([d_xa,t_xa,d_xb])[1])*(sorted([d_ya,t_yb, d_yb])[1] - sorted([d_ya,t_ya,d_yb])[1])
+
+                                                # Compute YOLO Detection Area
                                                 dtcn_area = (d_xb - d_xa) * (d_yb - d_ya)
 
+                                                # Verify If SIFT And FLANN Detection Is Actually A Positive
                                                 if ovlp_area >= 0.5*dtcn_area :
+                                                        # Re-initialize The Tracker On The Current Positive
                                                         trkCSRT = cv2.TrackerCSRT_create()
                                                         trkCSRT.init(frame, (d_xa,d_ya,d_xb-d_xa,d_yb-d_ya))   
                                 
 
                                                 
-        # update the FPS counter
+        # Update The FPS Counter
         fps.update()
         fps.stop()
         
-        # initialize the set of information we'll be displaying on
-        # the frame
-        info = ['r[0]', "{:.2f}".format(fps.fps())]
+        # Display FPS On The Frame
+        cv2.putText(frame, "{:.2f}".format(fps.fps()), (10, H - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
-        # loop over the info tuples and draw them on our frame
-        cv2.putText(frame, info[1], (10, H - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-
+        # Display The Frame
         cv2.imshow("Frame", frame)
+
+        # Detect Keypress
         key = cv2.waitKey(1) & 0xFF
 
-        # if the `q` key was pressed, break from the loop
+        # On Pressing 'q', Break From Infinite Loop
         if key == ord("q"):
                 break
+        # On Pressing 'c', Cancel The Current Tracking
         elif key == ord("c"):
                 init = False
 
 
-# if we are using a webcam, release the pointer
-if not args.get("video", False):
-	vs.stop()
+# Release The WebCam Pointer
+vs.stop()
  
-# otherwise, release the file pointer
-else:
-	vs.release()
- 
-# close all windows
+# Close All Windows
 cv2.destroyAllWindows()     
 
 
