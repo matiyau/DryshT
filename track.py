@@ -9,6 +9,11 @@ import imutils
 import numpy as np
 import time
 
+# Set Parameters
+match_Thresh = 10
+mainWindow = "Tracker"
+
+
 # Function To Return The Good Matches
 def goodMatches(dsc_src, dsc_dst) :
         #Carry Out FLANN Based Matching
@@ -122,19 +127,19 @@ while True :
 
                                         # Compute SIFT Features For 4 Different Orientations (Separated By 90 Deg.)
                                         roi = cv2.cvtColor(frame[d_ya:d_yb, d_xa:d_xb], cv2.COLOR_BGR2GRAY)
-                                        cv2.imshow("0", roi)
+                                        #cv2.imshow("0", roi)
                                         kptSIFT_src[0], dscSIFT_src[0] = sift.detectAndCompute(roi, None)
                                         dims_src[0] = roi.shape[:2]
                                         roi = imutils.rotate_bound(roi, 90)
-                                        cv2.imshow("90", roi)
+                                        #cv2.imshow("90", roi)
                                         kptSIFT_src[1], dscSIFT_src[1] = sift.detectAndCompute(roi, None)
                                         dims_src[1] = roi.shape[:2]
                                         roi = imutils.rotate_bound(roi, 90)
-                                        cv2.imshow("180", roi)
+                                        #cv2.imshow("180", roi)
                                         kptSIFT_src[2], dscSIFT_src[2] = sift.detectAndCompute(roi, None)
                                         dims_src[2] = roi.shape[:2]
                                         roi = imutils.rotate_bound(roi, 90)
-                                        cv2.imshow("270", roi)
+                                        #cv2.imshow("270", roi)
                                         kptSIFT_src[3], dscSIFT_src[3] = sift.detectAndCompute(roi, None)
                                         dims_src[3] = roi.shape[:2]
 
@@ -154,8 +159,7 @@ while True :
                         # Focus Only On The Detections Of Specified Type
                         if i[0] == "cell phone" :
                                 dtcts.append(i)
-                                                               
-
+                                
                 # If CSRT Tracking Was Successful                
                 if resCSRT :
                         for i in dtcts:
@@ -221,7 +225,7 @@ while True :
                                 matches_best = good[best_index]
 
                                 # If Best Match Is Better Than The Threshold                                                
-                                if len(matches_best)>10 :
+                                if len(matches_best) > matchThresh :
                                         # Create NumPy Arrays Of Matching Points In Source And Destination Images
                                         src_pts = np.float32([kptSIFT_src[best_index][m.queryIdx].pt for m in matches_best]).reshape(-1,1,2)
                                         dst_pts = np.float32([kptSIFT_dst[m.trainIdx].pt for m in matches_best]).reshape(-1,1,2)
