@@ -1,18 +1,25 @@
 from copy import deepcopy as dc
 from imutils.video import FPS
 from imutils.video import VideoStream
-import darknet as dn
 import matplotlib.pyplot as plt
+import numpy as np
 import argparse
 import cv2
 import imutils
-import numpy as np
+import os
+import sys
 import time
 
 # Set Parameters
 matchThresh = 10
 mainWindow = "Tracker"
 
+# Select Directories For Darknet Files
+scriptDir = sys.path[0]
+os.chdir(scriptDir)
+sys.path.append(os.path.join(scriptDir, 'dnFiles'))
+import darknet as dn
+                
 
 # Function To Return The Good Matches
 def goodMatches(dsc_src, dsc_dst) :
@@ -62,9 +69,8 @@ search_params = dict(checks = 50)
 flann = cv2.FlannBasedMatcher(index_params, search_params)
 
 # Configure YOLO
-dn_dir = "/home/n7/darknet/"
-net = dn.load_net(dn_dir + "cfg/yolov3.cfg", dn_dir + "yolov3.weights", 0)
-meta = dn.load_meta(dn_dir + "cfg/coco.data")
+net = dn.load_net(os.path.join(scriptDir, "dnFiles/yolov3.cfg"), os.path.join(scriptDir, "dnFiles/yolov3.weights"), 0)
+meta = dn.load_meta(os.path.join(scriptDir, "dnFiles/coco.data"))
  
 # Initialize FPS Estimator
 fps = FPS().start()
