@@ -124,6 +124,7 @@ def classify(net, meta, im):
 
 def detect(net, meta, image, thresh=.5, hier_thresh=.5, nms=.45):
     im = load_image(image, 0, 0)
+    #im = image
     num = c_int(0)
     pnum = pointer(num)
     predict_image(net, im)
