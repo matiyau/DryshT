@@ -136,7 +136,7 @@ while True :
                                 [d_xa, d_ya, d_xb, d_yb] = [int(i[2][0] - i[2][2]/2), int(i[2][1] - i[2][3]/2), int(i[2][0] + i[2][2]/2), int(i[2][1] + i[2][3]/2)]
                                 [d_xa, d_ya, d_xb, d_yb] = [max(0, d_xa), max(0,d_ya), min(d_xb, W), min(d_yb, H)]
                                 
-                                cv2.rectangle(frame, (d_xa, d_ya), (d_xb, d_yb), (0, 255, 0), 2)
+                                #cv2.rectangle(frame, (d_xa, d_ya), (d_xb, d_yb), (0, 255, 0), 2)
                                 
                                 
                 if resCSRT :
@@ -154,6 +154,7 @@ while True :
                                         cv2.rectangle(frame, (t_xa, t_ya), (t_xa + t_w, t_ya + t_h), (0, 0, 255), 2)
                                         trkCSRT = cv2.TrackerCSRT_create()
                                         trkCSRT.init(frame, (d_xa,d_ya,d_xb-d_xa,d_yb-d_ya))
+                                        #print("Centre : " + str(t_xa + t_w/2) + ", " + str(t_ya + t_h/20))
                                         break
 
                                 if dtcts.index(i) == len(dtcts)-1 :
@@ -193,17 +194,15 @@ while True :
                                         if M is not None:
                                                 dst = cv2.perspectiveTransform(pts,M)
                                                 
-                                                #print(np.int32(dst))
                                                 corPts = [[int(i[0][0]), int(i[0][1])] for i in dst]
                                                 [t_xa, t_ya, t_xb, t_yb] = [min(i[0][0] for i in dst), min(i[0][1] for i in dst), max(i[0][0] for i in dst), max(i[0][1] for i in dst)]
-                                                cv2.rectangle(frame, (t_xa, t_ya), (t_xb, t_yb), (0, 255, 0), 2)
+                                                #cv2.rectangle(frame, (t_xa, t_ya), (t_xb, t_yb), (0, 255, 0), 2)
                                                 cv2.polylines(frame,[np.int32(dst)],True,(255,0,0),2, cv2.LINE_AA)
 
                                                 ovlp_area = (sorted([d_xa, t_xb, d_xb])[1] - sorted([d_xa,t_xa,d_xb])[1])*(sorted([d_ya,t_yb, d_yb])[1] - sorted([d_ya,t_ya,d_yb])[1])
                                                 dtcn_area = (d_xb - d_xa) * (d_yb - d_ya)
 
                                                 if ovlp_area >= 0.5*dtcn_area :
-                                                        #cv2.rectangle(frame, (t_xa, t_ya), (t_xa + t_w, t_ya + t_h), (255, 0, 0), 2)
                                                         trkCSRT = cv2.TrackerCSRT_create()
                                                         trkCSRT.init(frame, (d_xa,d_ya,d_xb-d_xa,d_yb-d_ya))   
                                 
