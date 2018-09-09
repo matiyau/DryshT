@@ -10,7 +10,7 @@ import numpy as np
 import time
 
 # Set Parameters
-match_Thresh = 10
+matchThresh = 10
 mainWindow = "Tracker"
 
 
