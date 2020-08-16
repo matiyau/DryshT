@@ -1,6 +1,9 @@
 from ctypes import *
 import math
 import random
+import cv2
+import numpy as np
+from random import randint
 
 def sample(probs):
     s = sum(probs)
@@ -44,8 +47,51 @@ class METADATA(Structure):
 
     
 
-lib = CDLL("dnFiles/libdarknet.so", RTLD_GLOBAL)
-#lib = CDLL("libdarknet.so", RTLD_GLOBAL)
+
+class IplROI(Structure):
+    pass
+
+class IplTileInfo(Structure):
+    pass
+
+class IplImage(Structure):
+    pass
+
+IplImage._fields_ = [
+    ('nSize', c_int),
+    ('ID', c_int),
+    ('nChannels', c_int),               
+    ('alphaChannel', c_int),
+    ('depth', c_int),
+    ('colorModel', c_char * 4),
+    ('channelSeq', c_char * 4),
+    ('dataOrder', c_int),
+    ('origin', c_int),
+    ('align', c_int),
+    ('width', c_int),
+    ('height', c_int),
+    ('roi', POINTER(IplROI)),
+    ('maskROI', POINTER(IplImage)),
+    ('imageId', c_void_p),
+    ('tileInfo', POINTER(IplTileInfo)),
+    ('imageSize', c_int),          
+    ('imageData', c_char_p),
+    ('widthStep', c_int),
+    ('BorderMode', c_int * 4),
+    ('BorderConst', c_int * 4),
+    ('imageDataOrigin', c_char_p)]
+
+
+class iplimage_t(Structure):
+    _fields_ = [('ob_refcnt', c_ssize_t),
+                ('ob_type',  py_object),
+                ('a', POINTER(IplImage)),
+                ('data', py_object),
+                ('offset', c_size_t)]
+
+
+#lib = CDLL("/home/pjreddie/documents/darknet/libdarknet.so", RTLD_GLOBAL)
+lib = CDLL(b"dnFiles/libdarknet.so", RTLD_GLOBAL)
 lib.network_width.argtypes = [c_void_p]
 lib.network_width.restype = c_int
 lib.network_height.argtypes = [c_void_p]
@@ -114,6 +160,7 @@ predict_image = lib.network_predict_image
 predict_image.argtypes = [c_void_p, IMAGE]
 predict_image.restype = POINTER(c_float)
 
+
 def classify(net, meta, im):
     out = predict_image(net, im)
     res = []
@@ -122,23 +169,57 @@ def classify(net, meta, im):
     res = sorted(res, key=lambda x: -x[1])
     return res
 
+
+def np_to_img(arr):
+    # need to return old values to avoid python freeing memory
+    arr = arr.transpose(2,0,1)
+    c, h, w = arr.shape[0:3]
+    arr = np.ascontiguousarray(arr.flat, dtype=np.float32) / 255.0
+    data = arr.ctypes.data_as(POINTER(c_float))
+    im = IMAGE(w,h,c,data)
+    return im, arr
+
 def detect(net, meta, image, thresh=.5, hier_thresh=.5, nms=.45):
-    im = load_image(image, 0, 0)
-    #im = image
+    """if isinstance(image, bytes):  
+        # image is a filename 
+        # i.e. image = b'/darknet/data/dog.jpg'
+        im = load_image(image, 0, 0)
+    else:  
+        # image is an nparray
+        # i.e. image = cv2.imread('/darknet/data/dog.jpg')
+        im, image = array_to_image(image)
+        rgbgr_image(im)
+    """
+    im, image = np_to_img(image)
+    rgbgr_image(im)
     num = c_int(0)
     pnum = pointer(num)
     predict_image(net, im)
-    dets = get_network_boxes(net, im.w, im.h, thresh, hier_thresh, None, 0, pnum)
+    dets = get_network_boxes(net, im.w, im.h, thresh, 
+                             hier_thresh, None, 0, pnum)
     num = pnum[0]
-    if (nms): do_nms_obj(dets, num, meta.classes, nms);
+    if nms: do_nms_obj(dets, num, meta.classes, nms)
 
     res = []
     for j in range(num):
-        for i in range(meta.classes):
-            if dets[j].prob[i] > 0:
+        a = dets[j].prob[0:meta.classes]
+        if any(a):
+            ai = np.array(a).nonzero()[0]
+            for i in ai:
                 b = dets[j].bbox
-                res.append((meta.names[i], dets[j].prob[i], (b.x, b.y, b.w, b.h)))
+                res.append((meta.names[i], dets[j].prob[i], 
+                           (b.x, b.y, b.w, b.h)))
+
     res = sorted(res, key=lambda x: -x[1])
-    free_image(im)
+    if isinstance(image, bytes): free_image(im)
     free_detections(dets, num)
     return res
+
+
+''' 
+if __name__ == "__main__":
+    net = load_net("yolov2-tiny.cfg", "yolov2-tiny.weights", 0)
+    meta = load_meta("voc.data")
+    vid_source = 0
+    runOnVideo(net, meta, vid_source) 
+'''

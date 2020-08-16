@@ -18,8 +18,9 @@ mainWindow = "Tracker"
 scriptDir = sys.path[0]
 os.chdir(scriptDir)
 sys.path.append(os.path.join(scriptDir, 'dnFiles'))
+
 import darknet as dn
-                
+        
 
 # Function To Return The Good Matches
 def goodMatches(dsc_src, dsc_dst) :
@@ -40,14 +41,17 @@ def selectObj(event,x,y,flags,param) :
                 if event == cv2.EVENT_LBUTTONUP :
                         global click_x
                         global click_y
-                        click_x = x
-                        click_y = y
+
+                        #Display Image Is Twice The Captured Image
+                        click_x = x/2
+                        click_y = y/2
         
 
 
 # Start The Webcam Stream
 print("Starting Webcam...")
-vs = VideoStream(src=0).start()
+vs = cv2.VideoCapture(0)
+#vs = VideoStream(src=0).start()
 time.sleep(1.0)
  
 # Create Objects For Tracker And Its Clone
@@ -69,11 +73,9 @@ search_params = dict(checks = 50)
 flann = cv2.FlannBasedMatcher(index_params, search_params)
 
 # Configure YOLO
-net = dn.load_net(os.path.join(scriptDir, "dnFiles/yolov3.cfg"), os.path.join(scriptDir, "dnFiles/yolov3.weights"), 0)
-meta = dn.load_meta(os.path.join(scriptDir, "dnFiles/coco.data"))
- 
-# Initialize FPS Estimator
-fps = FPS().start()
+net = dn.load_net((os.path.join(scriptDir, "dnFiles/yolov3.cfg")).encode(), (os.path.join(scriptDir, "dnFiles/yolov3.weights")).encode(), 0)
+meta = dn.load_meta((os.path.join(scriptDir, "dnFiles/coco.data")).encode())
+
 
 # Parameter To Store Status Of Tracking
 init = False
@@ -87,8 +89,11 @@ click_x = -1
 click_y = -1
 
 while True :
+        # Start FPS Estimator
+        fps = FPS().start()
+
         # Capture Frame From Stream
-        frame = vs.read()
+        frame = vs.read()[1]
 
         # Check If End Of Stream Has Been Reached
         if frame is None :
@@ -98,18 +103,16 @@ while True :
         # Store Dimensions Of Frame
         H, W = frame.shape[:2]
 
-        # Save The Frame To Memory
-        cv2.imwrite("f.png",frame)
 
         # Run YOLO On The Stored File
-        r = dn.detect(net, meta, "f.png")
+        r = dn.detect(net, meta, frame)
 
         # If Tracking Is Not Currently Active
         if not init :
                 # Loop Through The Detections Given By YOLO
                 for i in r :
                         # Focus Only On The Detections Of Specified Type
-                        if i[0] == "cell phone" :
+                        if i[0] == b"cell phone" :
                                 # Convert YOLO Coordinates To OpenCV Coordinates
                                 [d_xa, d_ya, d_xb, d_yb] = [int(i[2][0] - i[2][2]/2), int(i[2][1] - i[2][3]/2), int(i[2][0] + i[2][2]/2), int(i[2][1] + i[2][3]/2)]
 
@@ -163,7 +166,7 @@ while True :
                 # Loop Through The Detections Given By YOLO
                 for i in r :
                         # Focus Only On The Detections Of Specified Type
-                        if i[0] == "cell phone" :
+                        if i[0] == b"cell phone" :
                                 dtcts.append(i)
                                 
                 # If CSRT Tracking Was Successful                
@@ -274,9 +277,11 @@ while True :
         # Update The FPS Counter
         fps.update()
         fps.stop()
+
+        frame = cv2.resize(frame, None, fx=2, fy=2, interpolation = cv2.INTER_CUBIC)
         
         # Display FPS On The Frame
-        cv2.putText(frame, "{:.2f}".format(fps.fps()), (10, H - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+        cv2.putText(frame, "FPS : " + "{:.2f}".format(fps.fps()), (10, 2*H - 20), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 7)
 
         # Display The Frame
         cv2.imshow("Frame", frame)
@@ -293,13 +298,7 @@ while True :
 
 
 # Release The WebCam Pointer
-vs.stop()
+vs.release()
  
 # Close All Windows
-cv2.destroyAllWindows()     
-
-
-
-
-
-
+cv2.destroyAllWindows()
