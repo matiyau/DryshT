@@ -1,0 +1,1 @@
+./darknet detector train aerial/aerial.data aerial/aerial_yolov3.cfg aerial/darknet53.conv.74

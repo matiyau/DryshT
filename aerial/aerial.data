@@ -1,0 +1,6 @@
+classes= 1
+train  = /home/n7/darknet/aerial/aerial_train.txt
+valid  = /home/n7/darknet/aerial/aerial_test.txt
+names = /home/n7/darknet/aerial/aerial.names
+backup = backup
+
